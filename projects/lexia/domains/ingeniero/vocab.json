@@ -1,0 +1,26 @@
+[
+  {
+    "word": "prototipo",
+    "definition": "Modelo inicial de una solución técnica.",
+    "level": "B1",
+    "tags": [
+      "ingenieria"
+    ]
+  },
+  {
+    "word": "tolerancia",
+    "definition": "Margen aceptable de variación en una medida.",
+    "level": "B2",
+    "tags": [
+      "ingenieria"
+    ]
+  },
+  {
+    "word": "iteración",
+    "definition": "Repetición para mejorar un diseño.",
+    "level": "B2",
+    "tags": [
+      "ingenieria"
+    ]
+  }
+]

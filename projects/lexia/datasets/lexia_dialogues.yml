@@ -1,0 +1,6 @@
+- id: ejemplo_abogado_1
+  domain: abogado
+  level: B1
+  turns:
+    - user: "Hola, quiero practicar vocabulario jurídico."
+    - bot: "Perfecto. Empecemos con 'recurso'. ¿Sabes qué significa?"

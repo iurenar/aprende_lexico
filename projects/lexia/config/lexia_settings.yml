@@ -1,0 +1,4 @@
+domains_path: "projects/lexia/domains"
+datasets:
+  - "projects/lexia/datasets/lexia_dialogues.yml"
+default_agent: "lexia"

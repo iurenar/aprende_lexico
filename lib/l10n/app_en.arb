@@ -1,0 +1,35 @@
+{
+  "@@locale": "en",
+
+  "settings": "Settings",
+  "preferences": "Preferences",
+
+  "voiceVolume": "Voice volume",
+  "adjustVoiceVolume": "Adjust voice volume",
+
+  "voiceSpeed": "Voice speed",
+  "voiceSpeedLevels": "Playback speed",
+
+  "language": "Language",
+  "selectLanguage": "Select language",
+
+  "privacy": "Privacy",
+  "privacySecurity": "Privacy and security",
+
+  "support": "Support",
+
+  "help": "Help",
+  "aboutApp": "About the app",
+
+  "logout": "Log out",
+  "confirmLogout": "Are you sure you want to log out?",
+  "cancel": "Cancel",
+
+  "changePassword": "Change password",
+  "passwordResetSent": "We sent you an email to reset your password",
+
+  "slow": "Slow",
+  "normal": "Normal",
+  "fast": "Fast",
+  "veryFast": "Very fast"
+}

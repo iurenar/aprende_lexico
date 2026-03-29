@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "235736394673",
+    "project_id": "lexiga-2b637",
+    "storage_bucket": "lexiga-2b637.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:235736394673:android:b5f459aa7ce0049211ab90",
+        "android_client_info": {
+          "package_name": "com.example.aprende_lexico"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "235736394673-rpr1t1c99mn671lclpldutr2ajd0i42m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.aprende_lexico",
+            "certificate_hash": "4cc842525a75e3b510cefae53e9194bd1590d894"
+          }
+        },
+        {
+          "client_id": "235736394673-0rcdtmlak89cmkqe4sn6gkqnmqdn22v9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDv_3iQn-cSba5ORTY_H9HoFZRq7YCRuhQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "235736394673-0rcdtmlak89cmkqe4sn6gkqnmqdn22v9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "235736394673-rou2lvq3ss3coks1hvf0fm0ncp5dnrev.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.aprendeLexico"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
