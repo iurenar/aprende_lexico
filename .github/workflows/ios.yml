@@ -24,6 +24,9 @@ jobs:
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
+      - name: 🌍 Generate localization files
+        run: flutter gen-l10n
+
       - name: Archive app
         run: |
           cd build/ios/iphoneos
