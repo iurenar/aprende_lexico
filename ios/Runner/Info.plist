@@ -42,6 +42,12 @@
     <key>UIMainStoryboardFile</key>
     <string>Main</string>
 
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Necesitamos acceso al micrófono para grabar tu voz</string>
+
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Necesitamos reconocimiento de voz para transcribir</string>
+
     <!-- ✅ ORIENTACIONES -->
     <key>UISupportedInterfaceOrientations</key>
     <array>

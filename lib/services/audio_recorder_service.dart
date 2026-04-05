@@ -1,82 +1,87 @@
 // lib/services/audio_recorder_service.dart
 import 'dart:io';
-import 'dart:async';
-import 'package:record/record.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 class AudioRecorderService {
   final AudioRecorder _recorder = AudioRecorder();
-  String? _currentFilePath;
-  bool _isRecording = false;
-
-  bool get isRecording => _isRecording;
+  bool _isDisposed = false;
 
   Future<bool> requestPermissions() async {
     try {
-      // Solicitar permisos de micrófono
-      final hasPermission = await _recorder.hasPermission();
-      if (!hasPermission) {
-        return false;
-      }
-      return true;
+      if (_isDisposed) return false;
+      return await _recorder.hasPermission();
     } catch (e) {
-      print("❌ Error al solicitar permisos: $e");
+      debugPrint("❌ Error en requestPermissions: $e");
       return false;
     }
   }
 
   Future<String?> startRecording() async {
     try {
-      // Crear archivo único
-      final dir = await getApplicationDocumentsDirectory();
+      if (_isDisposed) return null;
+
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+      }
+
+      final directory = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      _currentFilePath = '${dir.path}/presentation_$timestamp.m4a';
+      final path = '${directory.path}/presentation_$timestamp.m4a';
 
-      print("🎙️ Iniciando grabación en: $_currentFilePath");
+      debugPrint("🎙️ Iniciando grabación en: $path");
 
-      // Configurar y empezar grabación
       await _recorder.start(
         RecordConfig(
-          encoder: AudioEncoder.aacLc, // Formato AAC (buena calidad)
-          bitRate: 128000, // 128 kbps
-          sampleRate: 44100, // 44.1 kHz
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
         ),
-        path: _currentFilePath!,
+        path: path,
       );
 
-      _isRecording = true;
-      return _currentFilePath;
+      return path;
     } catch (e) {
-      print("❌ Error al iniciar grabación: $e");
+      debugPrint("❌ Error iniciando grabación: $e");
       return null;
     }
   }
 
   Future<String?> stopRecording() async {
-    if (!_isRecording) return null;
-
     try {
-      final path = await _recorder.stop();
-      _isRecording = false;
+      if (_isDisposed) return null;
 
-      if (path != null && await File(path).exists()) {
-        final fileSize = await File(path).length();
-        print("✅ Grabación detenida: $path (${fileSize ~/ 1024} KB)");
-        return path;
+      if (!await _recorder.isRecording()) {
+        debugPrint("⚠️ No hay grabación activa");
+        return null;
       }
 
-      return null;
+      final path = await _recorder.stop();
+      debugPrint("✅ Grabación detenida: $path");
+
+      if (path != null) {
+        final file = File(path);
+        if (await file.exists()) {
+          debugPrint("📁 Archivo final: ${await file.length()} bytes");
+        }
+      }
+
+      return path;
     } catch (e) {
-      print("❌ Error al detener grabación: $e");
-      _isRecording = false;
+      debugPrint("❌ Error deteniendo grabación: $e");
       return null;
     }
   }
 
   Future<void> dispose() async {
-    if (_isRecording) {
-      await _recorder.stop();
+    _isDisposed = true;
+    try {
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+      }
+    } catch (e) {
+      debugPrint("❌ Error en dispose: $e");
     }
-    await _recorder.dispose();
   }
 }

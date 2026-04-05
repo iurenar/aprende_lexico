@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data' as typed;
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -10,7 +12,6 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:aprende_lexico/chat_messages/chat_message.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import 'package:aprende_lexico/learn/learn_progress_services.dart';
 import 'package:aprende_lexico/enums/training_mode.dart';
 import 'package:aprende_lexico/enums/interview_flow.dart';
@@ -23,6 +24,7 @@ import '../onboarding/onboarding_controller.dart';
 import '../prompts/profession_prompts.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/whisper_service.dart';
+
 
 enum DifficultyLevel { basic, intermediate, advanced }
 enum LexicalDeficitType { vagueVerbs, genericNouns, weakStructure, lackOfConnectors }
@@ -378,15 +380,32 @@ $documentContext
     _initializeServices();
   }
 
+  // SOLO TE MUESTRO LAS PARTES MODIFICADAS (TODO LO DEMÁS QUEDA IGUAL)
+
   Future<void> _initializeServices() async {
+    await WhisperService.initialize();
+
     final speechReady = await _speechToText.initialize(
       onStatus: _onSpeechStatus,
       onError: (error) => debugPrint("❌ STT error: $error"),
+      debugLogging: true, // ✅ importante para iOS
     );
 
     setState(() {
       _speechReady = speechReady;
     });
+
+    // ✅ CONFIGURACIÓN iOS TTS
+
+    await _tts.setSharedInstance(true); // 🔥 CLAVE iOS
+    await _tts.awaitSpeakCompletion(true); // 🔥 CLAVE iOS
+    await _tts.setIosAudioCategory(
+      IosTextToSpeechAudioCategory.playAndRecord,
+      [
+        IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+        IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
+      ],
+    );
 
     await _tts.setLanguage("es-ES");
     await _tts.setSpeechRate(0.5);
@@ -433,6 +452,15 @@ $documentContext
             cancelOnError: false,
             localeId: "es-ES",
           );
+        }
+        if (status == "notListening" && _micState == MicState.listening) {
+          debugPrint("⚠️ iOS cortó el mic - reiniciando");
+
+          Future.delayed(const Duration(milliseconds: 400), () {
+            if (mounted && _micState == MicState.listening) {
+              _startListening();
+            }
+          });
         }
       });
     }
@@ -579,7 +607,7 @@ $documentContext
       await _speechToText.listen(
         onResult: _onSpeechResult,
         listenFor: const Duration(seconds: 60),
-        pauseFor: const Duration(seconds: 2),
+        pauseFor: const Duration(seconds: 3),
         partialResults: true,
         listenMode: stt.ListenMode.dictation,
         cancelOnError: false,
@@ -647,80 +675,134 @@ $documentContext
   Future<void> _finishPresentationManually() async {
     debugPrint("🎤 FINALIZANDO PRESENTACIÓN - Procesando audio...");
 
+    if (_isTranscribing) {
+      debugPrint("⚠️ Ya está transcribiendo, ignorando");
+      return;
+    }
+
     setState(() {
       _micState = MicState.idle;
       _isTranscribing = true;
     });
 
-    // Detener timer
     _presentationTimer?.cancel();
 
-    // Detener grabación
     String? audioPath;
     if (_isRecording) {
       audioPath = await _audioRecorder.stopRecording();
+      debugPrint("📁 Audio path devuelto: $audioPath");
+
       setState(() {
         _isRecording = false;
+        _currentRecordingPath = null;
       });
     }
 
-    // Mostrar mensaje de procesamiento
-    setState(() {
-      _messages.add(ChatMessage(
-        text: "⏳ Procesando tu presentación... Esto tomará unos segundos.",
-        isUser: false,
-      ));
-    });
-    _scrollToBottom();
+    if (audioPath == null) {
+      _handleTranscriptionError("No se generó archivo de audio");
+      return;
+    }
 
-    // Transcribir audio si existe
-    if (audioPath != null && await File(audioPath).exists()) {
-      try {
-        // Usar Whisper para transcribir
-        final transcript = await WhisperService.transcribeAudio(audioPath);
+    // Verificar archivo original
+    final sourceFile = File(audioPath);
+    if (!await sourceFile.exists()) {
+      _handleTranscriptionError("Archivo original no encontrado");
+      return;
+    }
 
-        debugPrint("📝 Transcripción completa (${transcript.length} caracteres)");
-        debugPrint("📝 Primeros 200 chars: ${transcript.substring(0, min(200, transcript.length))}");
+    final sourceSize = await sourceFile.length();
+    debugPrint("📁 Archivo original: $sourceSize bytes");
 
-        // Guardar transcripción
-        setState(() {
-          _fullPresentationText = transcript;
-          _messages.add(ChatMessage(
-            text: "📄 Transcripción completada. Analizando...",
-            isUser: false,
-          ));
-        });
-        _scrollToBottom();
+    // 👇 COPIAR ARCHIVO A DOCUMENTS (más estable que cache)
+    final documentsDir = await getApplicationDocumentsDirectory();
+    final newAudioPath = '${documentsDir.path}/presentation_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
-        // Enviar a evaluación
-        await _onFinalSpeech(transcript);
+    try {
+      final destFile = File(newAudioPath);
 
-        // Opcional: Eliminar archivo de audio después de procesar
-        // File(audioPath).delete();
+      // Copiar el archivo
+      await sourceFile.copy(newAudioPath);
+      debugPrint("✅ Archivo copiado a: $newAudioPath");
 
-      } catch (e) {
-        debugPrint("❌ Error al transcribir: $e");
-        setState(() {
-          _messages.add(ChatMessage(
-            text: "❌ Error al procesar el audio. Por favor, intenta de nuevo.",
-            isUser: false,
-          ));
-        });
+      // Verificar que la copia existe
+      if (!await destFile.exists()) {
+        _handleTranscriptionError("Error al copiar el archivo de audio");
+        return;
       }
-    } else {
-      debugPrint("⚠️ No hay audio para procesar");
+
+      final copySize = await destFile.length();
+      debugPrint("📁 Archivo copiado: $copySize bytes");
+
+
+      // Procesar la copia
+      await _processAudioFileSafe(newAudioPath);
+
+
+    } catch (e) {
+      debugPrint("❌ Error copiando archivo: $e");
+      _handleTranscriptionError("Error al preparar el audio");
+    }
+  }
+
+  void _handleTranscriptionError(String message) {
+    debugPrint("❌ Error de transcripción: $message");
+    if (mounted) {
+      setState(() {
+        _messages.add(ChatMessage(text: "❌ $message", isUser: false));
+        _isTranscribing = false;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _processAudioFileSafe(String path) async {
+    try {
+      await WhisperService.initialize();
+
+      if (!mounted) return;
+
       setState(() {
         _messages.add(ChatMessage(
-          text: "No se detectó audio grabado. ¿Quieres intentar de nuevo?",
+          text: "⏳ Procesando tu presentación...",
           isUser: false,
         ));
       });
-    }
 
-    setState(() {
-      _isTranscribing = false;
-    });
+      // 🔥 VALIDACIÓN EXTRA (debug real)
+      final file = File(path);
+
+      final exists = await file.exists();
+      final size = exists ? await file.length() : 0;
+
+      debugPrint("📁 Exists: $exists");
+      debugPrint("📁 Size: $size bytes");
+
+      if (!exists || size < 5000) {
+        _handleTranscriptionError("Audio inválido o muy corto");
+        return;
+      }
+
+      // 🔥 LLAMADA CORRECTA
+      final transcript = await WhisperService.transcribeAudio(path);
+
+      if (transcript != null && transcript.isNotEmpty) {
+        await _onFinalSpeech(transcript);
+      } else {
+        _handleTranscriptionError("No se pudo transcribir el audio.");
+      }
+
+      // 🔥 LIMPIAR ARCHIVO (opcional pero recomendado)
+      if (await file.exists()) {
+        await file.delete();
+        debugPrint("🗑️ Archivo eliminado");
+      }
+
+    } catch (e) {
+      debugPrint("❌ Error procesando audio: $e");
+      _handleTranscriptionError("Error al procesar el audio");
+    }
   }
+
   Future<void> _restartListeningIfNeeded() async {
     if (!mounted) return;
     if (_mode != TrainingMode.presentation) return;
@@ -769,7 +851,8 @@ $documentContext
         partialResults: true,
         listenMode: stt.ListenMode.dictation,
         cancelOnError: false,
-        localeId: "es-ES",
+        localeId: Platform.isIOS ? "es_ES" : "es-ES",
+
       );
 
       if (started) {
@@ -1120,6 +1203,7 @@ Máximo 4 palabras.
     }
 
     await _tts.stop();
+    await Future.delayed(const Duration(milliseconds: 200));
     await _tts.speak(cleanText);
   }
 
@@ -1651,7 +1735,8 @@ Sé clara, directa y profesional.
             width: 220,
             height: 56,
             child: ElevatedButton.icon(
-              onPressed: (_speechReady && !_isTranscribing)
+              // ✅ CORRECCIÓN AQUÍ: No usar _speechReady en modo presentación
+              onPressed: !_isTranscribing
                   ? (_micState == MicState.listening
                   ? _finishPresentationManually
                   : _startListening)
@@ -1685,7 +1770,7 @@ Sé clara, directa y profesional.
       );
     }
 
-    // Para otros modos - usar _toggleListening
+    // Para otros modos - usar _toggleListening con _speechReady
     return SizedBox(
       width: 180,
       height: 52,

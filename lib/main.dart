@@ -15,11 +15,25 @@ import "package:flutter_localizations/flutter_localizations.dart";
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+// 🔥 IMPORTANTE PARA iOS + Android
+// (asegúrate de tener este archivo generado)
+import 'firebase_options.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
-  await dotenv.load(fileName: ".env");
+  try {
+    // 🔥 Firebase correctamente inicializado para iOS y Android
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // 🔐 Variables de entorno
+    await dotenv.load(fileName: ".env");
+
+  } catch (e) {
+    debugPrint("❌ Error inicializando app: $e");
+  }
 
   runApp(
     MultiProvider(
@@ -27,7 +41,6 @@ Future<void> main() async {
         ChangeNotifierProvider(
           create: (_) => OnboardingController(),
         ),
-
         ChangeNotifierProvider(
           create: (_) {
             final controller = SettingsController();
@@ -52,7 +65,6 @@ class LexiaApp extends StatelessWidget {
           title: 'LEXIGA',
           debugShowCheckedModeBanner: false,
 
-          // 🌎 idioma dinámico
           locale: settings.locale,
 
           supportedLocales: const [
@@ -115,11 +127,15 @@ class _AppStartupState extends State<AppStartup> {
   @override
   Widget build(BuildContext context) {
     if (_seenIntro == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
+
     if (!_seenIntro!) {
       return const IntroScreen();
     }
+
     return const AuthGate();
   }
 }
@@ -136,8 +152,11 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         if (!snapshot.hasData || snapshot.data == null) {
@@ -147,22 +166,30 @@ class AuthGate extends StatelessWidget {
         final user = snapshot.data!;
 
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get(),
           builder: (context, userSnapshot) {
+
             if (userSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
             }
 
             if (userSnapshot.hasData && userSnapshot.data!.exists) {
-              final userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+              final userData =
+              userSnapshot.data!.data() as Map<String, dynamic>?;
+
               final hasProfession = userData?['profession'] != null;
 
               if (hasProfession) {
-                // 👇 ACTUALIZAR ONBOARDING CONTROLLER (clave del original)
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  final controller = context.read<OnboardingController>();
 
-                  // Cargar profesión guardada
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final controller =
+                  context.read<OnboardingController>();
+
                   for (var p in Profession.values) {
                     if (p.name == userData?['profession']) {
                       controller.setProfessionFromSaved(p);
@@ -170,7 +197,6 @@ class AuthGate extends StatelessWidget {
                     }
                   }
 
-                  // Cargar nombre si existe
                   if (userData?['name'] != null) {
                     controller.onAuthenticated(
                       email: user.email ?? '',
@@ -184,13 +210,16 @@ class AuthGate extends StatelessWidget {
               }
             }
 
-            // Actualizar controller para nuevos usuarios
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              final controller = context.read<OnboardingController>();
+              final controller =
+              context.read<OnboardingController>();
+
               controller.onAuthenticated(
                 email: user.email ?? '',
                 name: user.displayName,
-                isGoogle: user.providerData.any((info) => info.providerId == 'google.com'),
+                isGoogle: user.providerData.any(
+                      (info) => info.providerId == 'google.com',
+                ),
               );
             });
 
@@ -201,4 +230,3 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
-

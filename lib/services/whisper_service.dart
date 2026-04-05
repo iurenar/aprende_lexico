@@ -1,107 +1,90 @@
 // lib/services/whisper_service.dart
-import 'dart:io';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class WhisperService {
-  // Usar Groq para Whisper (más rápido y económico)
-  static Future<String> transcribeAudio(String audioPath) async {
-    try {
+  static bool _isInitialized = false;
 
-      final groqApiKey = dotenv.env['GROQ_API_KEY'];
+  static Future<void> initialize() async {
+    if (_isInitialized) return;
 
-      if (groqApiKey == null || groqApiKey.isEmpty) {
-        throw Exception("❌ GROQ_API_KEY no está configurada en .env");
-      }
+    await dotenv.load();
+    _isInitialized = true;
 
-      print("🔄 Transcribiendo audio con Whisper...");
-
-      final file = File(audioPath);
-      if (!await file.exists()) {
-        throw Exception("Archivo de audio no encontrado");
-      }
-
-      // Crear request multipart
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('https://api.groq.com/openai/v1/audio/transcriptions'),
-      );
-
-      // Headers
-      request.headers.addAll({
-        'Authorization': 'Bearer $groqApiKey',
-      });
-
-      // Añadir archivo
-      request.files.add(
-        await http.MultipartFile.fromPath('file', audioPath),
-      );
-
-      // Añadir campos
-      request.fields['model'] = 'whisper-large-v3-turbo';
-      request.fields['language'] = 'es';
-      request.fields['response_format'] = 'json';
-
-      // Enviar request
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final transcript = data['text'];
-        print("✅ Transcripción completada (${transcript.length} caracteres)");
-        return transcript;
-      } else {
-        print("❌ Error Whisper: ${response.statusCode} - ${response.body}");
-        throw Exception("Error en transcripción: ${response.statusCode}");
-      }
-    } catch (e) {
-      print("❌ Error en transcribeAudio: $e");
-      rethrow;
-    }
+    debugPrint("✅ WhisperService inicializado");
   }
 
-  // Versión con OpenAI (alternativa)
-  static Future<String> transcribeWithOpenAI(String audioPath) async {
-    try {
-      final groqApiKey = dotenv.env['GROQ_API_KEY'];
+  /// 🔥 MÉTODO CORRECTO (usar SIEMPRE este)
+  static Future<String?> transcribeAudio(String path) async {
+    if (!_isInitialized) {
+      throw Exception("Whisper no inicializado");
+    }
 
-      if (groqApiKey == null || groqApiKey.isEmpty) {
-        throw Exception("❌ GROQ_API_KEY no está configurada en .env");
+    try {
+      final apiKey = dotenv.env['GROQ_API_KEY'];
+
+      if (apiKey == null || apiKey.isEmpty) {
+        throw Exception("API KEY no encontrada");
       }
 
-      final file = File(audioPath);
+      final file = File(path);
 
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("https://api.groq.com/openai/v1/chat/completions"),
+      // 🔴 VALIDACIONES CRÍTICAS
+      if (!await file.exists()) {
+        throw Exception("Archivo no existe: $path");
+      }
+
+      final fileSize = await file.length();
+      debugPrint("📁 Archivo para transcribir: $fileSize bytes");
+
+      if (fileSize < 5000) {
+        throw Exception("Audio demasiado pequeño ($fileSize bytes)");
+      }
+
+      final uri = Uri.parse(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
       );
 
-      request.headers.addAll({
-        'Authorization': "Bearer $groqApiKey", // Si tienes
-      });
+      final request = http.MultipartRequest("POST", uri);
 
+      request.headers["Authorization"] = "Bearer $apiKey";
+
+      request.fields["model"] = "whisper-large-v3-turbo";
+      request.fields["language"] = "es";
+
+      // 🔥 AQUÍ ESTÁ LA CLAVE
       request.files.add(
-        await http.MultipartFile.fromPath('file', audioPath),
+        await http.MultipartFile.fromPath(
+          "file",
+          path,
+          filename: "audio.m4a",
+        ),
       );
 
-      request.fields['model'] = 'whisper-1';
-      request.fields['language'] = 'es';
+      debugPrint("🚀 Enviando audio a Whisper...");
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await request.send();
+
+      final body = await response.stream.bytesToString();
+
+      debugPrint("📡 STATUS: ${response.statusCode}");
+      debugPrint("📡 BODY: $body");
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['text'];
+        final data = jsonDecode(body);
+        return data["text"];
       } else {
-        throw Exception("Error OpenAI: ${response.statusCode}");
+        throw Exception("Whisper error: $body");
       }
+
     } catch (e) {
-      print("❌ Error OpenAI Whisper: $e");
-      rethrow;
+      debugPrint("🔥 ERROR REAL WHISPER: $e");
+      return null;
     }
   }
 }
