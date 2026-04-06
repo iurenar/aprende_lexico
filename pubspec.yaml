@@ -57,7 +57,7 @@ flutter:
     - assets/google.png
     - assets/lexiga/Splash.png
     - assets/lexiga/icono.png
-    - .env
+
 
 
 flutter_icons:
