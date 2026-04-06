@@ -15,7 +15,6 @@ Icon?
 profile
 xcuserdata
 **/.generated/
-.env
 
 Flutter/App.framework
 Flutter/Flutter.framework
@@ -34,3 +33,5 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+.env
