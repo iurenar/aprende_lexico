@@ -11,7 +11,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:aprende_lexico/chat_messages/chat_message.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'package:aprende_lexico/learn/learn_progress_services.dart';
 import 'package:aprende_lexico/enums/training_mode.dart';
 import 'package:aprende_lexico/enums/interview_flow.dart';
@@ -383,7 +383,7 @@ $documentContext
   // SOLO TE MUESTRO LAS PARTES MODIFICADAS (TODO LO DEMÁS QUEDA IGUAL)
 
   Future<void> _initializeServices() async {
-    await WhisperService.initialize();
+
 
     final speechReady = await _speechToText.initialize(
       onStatus: _onSpeechStatus,
@@ -757,7 +757,7 @@ $documentContext
 
   Future<void> _processAudioFileSafe(String path) async {
     try {
-      await WhisperService.initialize();
+
 
       if (!mounted) return;
 
@@ -783,7 +783,10 @@ $documentContext
       }
 
       // 🔥 LLAMADA CORRECTA
-      final transcript = await WhisperService.transcribeAudio(path);
+      final bytes = await File(path).readAsBytes();
+
+      final transcript =
+      await WhisperService.transcribeAudioBytes(bytes);
 
       if (transcript != null && transcript.isNotEmpty) {
         await _onFinalSpeech(transcript);
@@ -1367,49 +1370,32 @@ Devuelve:
     debugPrint("🤖 ENVIANDO A IA: $userText");
 
     try {
-      final groqApiKey = dotenv.env['GROQ_API_KEY'];
-
-      if (groqApiKey == null || groqApiKey.isEmpty) {
-        throw Exception("❌ GROQ_API_KEY no configurada");
-      }
-      final response = await http.post(
-        Uri.parse("https://api.groq.com/openai/v1/chat/completions"),
+      final response = await http
+          .post(
+        Uri.parse("https://us-central1-lexiga-2b637.cloudfunctions.net/chat"), // 🔥 CAMBIAR
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer $groqApiKey",
         },
         body: jsonEncode({
-          "model": "llama-3.1-8b-instant",
-          "messages": [
-            {
-              "role": "system",
-              "content": systemPrompt,
-            },
-            {
-              "role": "user",
-              "content": userText,
-            }
-          ],
-          "temperature": 0.7,
-          "max_tokens": 300,
-          "stream": false,
+          "userText": userText,
+          "systemPrompt": systemPrompt,
         }),
-      ).timeout(const Duration(seconds: 30));
+      )
+          .timeout(const Duration(seconds: 30));
 
       debugPrint("📡 STATUS CODE: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final decodedBody = utf8.decode(response.bodyBytes);
         final data = jsonDecode(decodedBody);
-        final aiText = data["choices"][0]["message"]["content"];
+
+        final aiText = data["response"];
+
         debugPrint("🧠 RESPUESTA IA: $aiText");
+
         return aiText;
-      } else if (response.statusCode == 401) {
-        throw Exception("API Key inválida. Verifica tu archivo secrets.dart");
-      } else if (response.statusCode == 429) {
-        throw Exception("Límite de tasa excedido. Espera un momento.");
       } else {
-        throw Exception("Error ${response.statusCode}: ${response.body}");
+        throw Exception("Error backend: ${response.body}");
       }
     } catch (e) {
       debugPrint("❌ Error en _askAI: $e");
@@ -1483,36 +1469,31 @@ Sé clara, directa y profesional.
     int maxTokens = 100,
   }) async {
     debugPrint("⚡ LIVE COACHING IA");
-    final groqApiKey = dotenv.env['GROQ_API_KEY'];
 
-    if (groqApiKey == null || groqApiKey.isEmpty) {
-      throw Exception("❌ GROQ_API_KEY no configurada");
+    try {
+      final response = await http.post(
+        Uri.parse("https://us-central1-lexiga-2b637.cloudfunctions.net/chat"), // 🔥 CAMBIAR ESTO
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "systemPrompt": systemPrompt,
+          "userText": userText,
+          "maxTokens": maxTokens,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data["response"];
+      } else {
+        throw Exception("Error backend: ${response.body}");
+      }
+
+    } catch (e) {
+      debugPrint("❌ ERROR IA: $e");
+      throw Exception("Error al conectar con la IA");
     }
-    final response = await http.post(
-      Uri.parse("https://api.groq.com/openai/v1/chat/completions"),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $groqApiKey",
-      },
-      body: jsonEncode({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-          {"role": "system", "content": systemPrompt},
-          {"role": "user", "content": userText},
-        ],
-        "temperature": 0.5,
-        "max_tokens": maxTokens,
-        "stream": false,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception("Live correction error: ${response.body}");
-    }
-
-    final decodedBody = utf8.decode(response.bodyBytes);
-    final data = jsonDecode(decodedBody);
-    return data["choices"][0]["message"]["content"];
   }
 
   void _showErrorDialog(String message) {

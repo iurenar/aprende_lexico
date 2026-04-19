@@ -13,7 +13,7 @@ import 'package:aprende_lexico/screens/intro_screen.dart';
 import 'enums/profession.dart';
 import "package:flutter_localizations/flutter_localizations.dart";
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 // 🔥 IMPORTANTE PARA iOS + Android
 // (asegúrate de tener este archivo generado)
@@ -28,8 +28,7 @@ Future<void> main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // 🔐 Variables de entorno
-    await dotenv.load(fileName: ".env");
+
 
   } catch (e) {
     debugPrint("❌ Error inicializando app: $e");
